@@ -4,8 +4,6 @@
 
 #define  Block_Size (sizeof(struct M_Block))
 
-void* head = NULL;
-
 typedef struct M_Block* Block_Ptr;
 
 struct M_Block {
@@ -15,13 +13,19 @@ struct M_Block {
     Block_Ptr prev;
 };
 
+struct Heap {
+    Block_Ptr head;
+    Block_Ptr end;
+};
 
+struct Heap heap = {NULL, NULL};
 
 Block_Ptr findFirstFit(Block_Ptr head, size_t size){
     if (head == NULL)  // head is not initialized
         return NULL;
 
-    Block_Ptr current = head;
+
+    Block_Ptr current = heap.head;
 
     while (current) {  // traverse the linked list
 
@@ -33,8 +37,8 @@ Block_Ptr findFirstFit(Block_Ptr head, size_t size){
     }
 
     if (current == NULL) {
-       // failed to find a fit
-       return NULL;
+        // failed to find a fit
+        return NULL;
     }
 
     return current;
@@ -42,7 +46,7 @@ Block_Ptr findFirstFit(Block_Ptr head, size_t size){
 
 
 void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
-    
+
     Block_Ptr newBlock = (Block_Ptr) ((char*)oldBlock + size);
 
     newBlock->next = oldBlock->next;
@@ -59,24 +63,55 @@ void* m_alloc(size_t size){
         return NULL;
     }
 
-    if (head != NULL){  // if the first block is initialized
-        Block_Ptr fit_block = findFirstFit(head, size);
-        
+    if (heap.head != NULL){  // if the first block is initialized
+        Block_Ptr fit_block = findFirstFit(heap.head, size);
+
         if (fit_block != NULL) {
+
             if (fit_block->size > size + Block_Size) {
                 // split into two
                 splitBlocksIntoTwo(fit_block, size);
             }
-        }
-        return NULL;
-    }
 
+            fit_block->isFree = 0;
+
+            return (void*)(fit_block + 1);
+        }
+        else {  // extend brk
+            Block_Ptr new_block = sbrk(Block_Size + size);
+
+            if (new_block == (void*) -1) return NULL;
+            new_block->size = size;
+            new_block->next = NULL;
+            new_block->prev = heap.end;
+            new_block->isFree = 0;
+
+            heap.end->next = new_block;
+            heap.end = new_block;
+            return new_block + 1;
+        }
+    }
+    else {  // list empty
+        Block_Ptr new_block = sbrk(Block_Size + size);
+
+        if (new_block == (void*) -1) return NULL;
+        new_block->size = size;
+        new_block->next = NULL;
+        new_block->prev = NULL;
+        new_block->isFree = 0;
+
+        heap.head = new_block;
+        heap.end = new_block;
+
+        return new_block + 1;
+
+    }
     return NULL;
 }
 
 
-int main()
-{
-    printf("Implementing malloc from scratch.\n");
-    return 0;
-}
+    int main()
+    {
+        printf("Implementing malloc from scratch.\n");
+        return 0;
+    }
