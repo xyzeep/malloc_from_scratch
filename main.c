@@ -16,6 +16,7 @@ struct M_Block {
     Block_Ptr prev;
 };
 
+
 struct Heap {
     Block_Ptr head;
     Block_Ptr end;
@@ -30,6 +31,7 @@ Block_Ptr findFirstFit(Block_Ptr head, size_t size);
 void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size);
 void* m_alloc(size_t size);
 void zeroFill(Block_Ptr m_block);
+void createMoreMemory(size_t size);
 
 // ######################
 // function definitions
@@ -78,6 +80,8 @@ void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
     oldBlock->size = size;
 }
 
+void createMoreMemory(size_t size){
+}
 
 void* m_alloc(size_t size){
     if (size == 0){
@@ -90,7 +94,7 @@ void* m_alloc(size_t size){
         Block_Ptr fit_block = findFirstFit(heap.head, size);
 
         if (fit_block != NULL) {  // if there is a block that fits
-            // and it is big enough to be split into two
+                                  // and it is big enough to be split into two
             if (fit_block->size > size + Block_Size) {
                 // split into two
                 splitBlocksIntoTwo(fit_block, size);
@@ -98,7 +102,7 @@ void* m_alloc(size_t size){
             // set the fit block's isFree to 0
             fit_block->isFree = 0;
 
-           // return the pointer to the "data" part of the fit block (after metadata)
+            // return the pointer to the "data" part of the fit block (after metadata)
             return (void*)(fit_block + 1);  
         }
 
@@ -125,22 +129,63 @@ void* m_alloc(size_t size){
 
         // same thing
         Block_Ptr new_block = sbrk(Block_Size + size);
-        
+
         if (new_block == (void*) -1) return NULL;
         new_block->size = size;
         new_block->next = NULL;
         new_block->prev = NULL;
         new_block->isFree = 0;
-        
+
         // new_block is both the head and the end
         heap.head = new_block;
         heap.end = new_block;
 
         return new_block + 1;
+    }
+    return NULL;
+}
 
+
+void* m_realloc(void* ptr, size_t size) {
+
+    Block_Ptr old_m_block;
+    void* new_m_block;
+    size_t old_size;
+
+    if (ptr == NULL) {
+        return m_alloc(size);
+    }
+    if (size == 0) {
+        m_free(ptr);
+        return NULL;
     }
 
-    return NULL;
+    old_m_block = (Block_Ptr)((char*) ptr - Block_Size);
+    old_size = old_m_block->size;
+
+    if (size <= old_size){
+        return ptr;
+    }
+
+    if ((new_m_block = m_alloc(size)) == NULL)
+        return NULL;
+
+    memcpy(new_m_block, ptr, old_size); 
+    m_free(ptr);
+
+    return new_m_block;
+}
+
+void m_free(void* ptr){
+    if (ptr == NULL)
+        return;
+
+    Block_Ptr m_block = (Block_Ptr) ptr;
+    m_block = m_block - 1;  // get block address
+    m_block->isFree = 1;
+
+
+    // TODO: apply coalesce adjacent free blocks, if any
 }
 
 // ###########################################################
