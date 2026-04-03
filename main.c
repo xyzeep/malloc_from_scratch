@@ -29,6 +29,7 @@ struct Heap heap = {NULL, NULL};
 // function prototypes
 Block_Ptr findFirstFit(Block_Ptr head, size_t size);
 void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size);
+Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block);
 void* m_alloc(size_t size);
 void zeroFill(Block_Ptr m_block);
 void createMoreMemory(size_t size);
@@ -69,13 +70,17 @@ Block_Ptr findFirstFit(Block_Ptr head, size_t size){
 
 
 void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
+    if (oldBlock == NULL)
+        return;
 
-    Block_Ptr newBlock = (Block_Ptr) ((char*)oldBlock + size);
+    Block_Ptr newBlock = (Block_Ptr) ((char*)oldBlock + Block_Size + size);
 
     newBlock->next = oldBlock->next;
     oldBlock->next = newBlock;
     newBlock->prev = oldBlock;
     newBlock->isFree = 1;
+    if (newBlock->next)
+        newBlock->next->prev = newBlock;
     newBlock->size = oldBlock->size - (size + Block_Size);
     oldBlock->size = size;
 }
@@ -118,9 +123,12 @@ void* m_alloc(size_t size){
             new_block->size = size;  // give the new block the size of size
             new_block->next = NULL;  // new_block's next is NULL bcus it's the last block
             new_block->prev = heap.end;  // new_block's prev is old last block
-            new_block->isFree = 0;  // set the new_block's free to 0 (False)
+            new_block->isFree = 0;  // set the new_block's free to 0 (false)
             heap.end->next = new_block;  // new_block is the next for prev last block
             heap.end = new_block;  // new_block is the new last block of heap
+            
+            // fill zero allocated
+            zeroFill(new_block);
 
             return new_block + 1;  // return the address of the new_block after the metadata
         }
@@ -140,10 +148,36 @@ void* m_alloc(size_t size){
         heap.head = new_block;
         heap.end = new_block;
 
+        // fill zero allocated
+        zeroFill(new_block);
+
         return new_block + 1;
     }
     return NULL;
 }
+
+void m_free(void* ptr){
+    if (ptr == NULL)
+        return;
+
+    Block_Ptr m_block = (Block_Ptr) ptr;
+    m_block = m_block - 1;  // get block address
+    m_block->isFree = 1;
+    
+    m_block = coalesceAdjacentFreeBlock(m_block);
+
+    if (m_block->next == NULL) {
+        if (m_block->prev == NULL){
+            heap.head = NULL;
+            heap.end = NULL;
+        }
+        else {
+            m_block->prev->next = NULL;
+        }
+        brk(m_block);
+    }
+}
+
 
 
 void* m_realloc(void* ptr, size_t size) {
@@ -160,7 +194,7 @@ void* m_realloc(void* ptr, size_t size) {
         return NULL;
     }
 
-    old_m_block = (Block_Ptr)((char*) ptr - Block_Size);
+    old_m_block = (Block_Ptr)ptr - 1;
     old_size = old_m_block->size;
 
     if (size <= old_size){
@@ -198,28 +232,6 @@ Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block){
     }
 
     return m_block;
-}
-
-void m_free(void* ptr){
-    if (ptr == NULL)
-        return;
-
-    Block_Ptr m_block = (Block_Ptr) ptr;
-    m_block = m_block - 1;  // get block address
-    m_block->isFree = 1;
-    
-    m_block = coalesceAdjacentFreeBlock();
-
-    if (m_block->next == NULL) {
-        if (m_block->prev == NULL){
-            heap.head = NULL;
-            heap.end = NULL;
-        }
-        else {
-            m_block->prev->next = NULL;
-        }
-        brk(m_block);
-    }
 }
 
 // ###########################################################
