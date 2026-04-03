@@ -1,9 +1,12 @@
 #include <stdio.h>
+
 #include <unistd.h>
 #include <string.h>
 
 // macros
 #define  Block_Size (sizeof(struct M_Block))
+#define ALIGNMENT 16
+#define ALIGN16(x) (((x) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
 // type definitons
 typedef struct M_Block* Block_Ptr;
@@ -83,6 +86,7 @@ void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
         newBlock->next->prev = newBlock;
     newBlock->size = oldBlock->size - (size + Block_Size);
     oldBlock->size = size;
+    zeroFill(newBlock);
 }
 
 void createMoreMemory(size_t size){
@@ -93,6 +97,8 @@ void* m_alloc(size_t size){
         return NULL;
     }
 
+    size = ALIGN16(size);
+
     if (heap.head != NULL){  // if the first block is initialized
 
         // check if an already-free block exists that fits the requirement
@@ -101,7 +107,7 @@ void* m_alloc(size_t size){
         if (fit_block != NULL) {  // if there is a block that fits
 
             if (fit_block->size > size + Block_Size) { // and it is big enough to be split into two
-                // split into two
+                                                       // split into two
                 splitBlocksIntoTwo(fit_block, size);
             }
             // set the fit block's isFree to 0
@@ -126,7 +132,7 @@ void* m_alloc(size_t size){
             new_block->isFree = 0;  // set the new_block's free to 0 (false)
             heap.end->next = new_block;  // new_block is the next for prev last block
             heap.end = new_block;  // new_block is the new last block of heap
-            
+
             // fill zero allocated
             zeroFill(new_block);
 
@@ -163,7 +169,7 @@ void m_free(void* ptr){
     Block_Ptr m_block = (Block_Ptr) ptr;
     m_block = m_block - 1;  // get block address
     m_block->isFree = 1;
-    
+    zeroFill(m_block);
     m_block = coalesceAdjacentFreeBlock(m_block);
 
     if (m_block->next == NULL) {
@@ -174,7 +180,9 @@ void m_free(void* ptr){
         else {
             m_block->prev->next = NULL;
         }
-        brk(m_block);
+        if (brk(m_block) != 0)
+            return;
+
     }
 }
 
@@ -193,6 +201,11 @@ void* m_realloc(void* ptr, size_t size) {
         m_free(ptr);
         return NULL;
     }
+
+    if (heap.head == NULL)
+        return NULL;
+
+    size = ALIGN16(size);
 
     old_m_block = (Block_Ptr)ptr - 1;
     old_size = old_m_block->size;
@@ -230,6 +243,8 @@ Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block){
             m_block->next->prev = prev_m_block;
         m_block = prev_m_block;
     }
+
+    zeroFill(m_block);
 
     return m_block;
 }
