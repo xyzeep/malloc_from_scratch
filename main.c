@@ -94,8 +94,8 @@ void* m_alloc(size_t size){
         Block_Ptr fit_block = findFirstFit(heap.head, size);
 
         if (fit_block != NULL) {  // if there is a block that fits
-                                  // and it is big enough to be split into two
-            if (fit_block->size > size + Block_Size) {
+
+            if (fit_block->size > size + Block_Size) { // and it is big enough to be split into two
                 // split into two
                 splitBlocksIntoTwo(fit_block, size);
             }
@@ -176,6 +176,30 @@ void* m_realloc(void* ptr, size_t size) {
     return new_m_block;
 }
 
+Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block){
+
+    if (m_block->next && m_block->next->isFree) {
+        Block_Ptr next_m_block = m_block->next;
+
+        m_block->size += next_m_block->size + Block_Size;
+        m_block->next = next_m_block->next;
+        if (next_m_block->next)
+            next_m_block->next->prev = m_block;
+    }
+
+    if (m_block->prev && m_block->prev->isFree) {
+        Block_Ptr prev_m_block = m_block->prev;
+
+        prev_m_block->size += m_block->size + Block_Size;
+        prev_m_block->next = m_block->next;
+        if (m_block->next)
+            m_block->next->prev = prev_m_block;
+        m_block = prev_m_block;
+    }
+
+    return m_block;
+}
+
 void m_free(void* ptr){
     if (ptr == NULL)
         return;
@@ -183,9 +207,19 @@ void m_free(void* ptr){
     Block_Ptr m_block = (Block_Ptr) ptr;
     m_block = m_block - 1;  // get block address
     m_block->isFree = 1;
+    
+    m_block = coalesceAdjacentFreeBlock();
 
-
-    // TODO: apply coalesce adjacent free blocks, if any
+    if (m_block->next == NULL) {
+        if (m_block->prev == NULL){
+            heap.head = NULL;
+            heap.end = NULL;
+        }
+        else {
+            m_block->prev->next = NULL;
+        }
+        brk(m_block);
+    }
 }
 
 // ###########################################################
