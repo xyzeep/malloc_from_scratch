@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 #include <string.h>
+#include <stdint.h>
 
 // macros
 #define  Block_Size (sizeof(struct M_Block))
@@ -91,6 +92,7 @@ void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
         heap.end = newBlock;
 
     zeroFill(newBlock);
+
 }
 
 Block_Ptr createMoreMemory(size_t size){
@@ -124,8 +126,11 @@ void* m_alloc(size_t size){
     if (size == 0){
         return NULL;
     }
-
+    
     size = ALIGN16(size);
+
+    if (size > (SIZE_MAX - Block_Size))
+        return NULL;
 
     if (heap.head != NULL){  // if the first block is initialized
 
@@ -180,7 +185,7 @@ void m_free(void* ptr){
 
 
 void* m_realloc(void* ptr, size_t size) {
-
+    
     Block_Ptr old_m_block;
     void* new_m_block;
     size_t old_size;
@@ -200,8 +205,11 @@ void* m_realloc(void* ptr, size_t size) {
 
     old_m_block = (Block_Ptr)ptr - 1;
     old_size = old_m_block->size;
-
+    
     if (size <= old_size){
+        if (old_m_block->size > (size + Block_Size + MIN_BLOCK_SIZE)){
+            splitBlocksIntoTwo(old_m_block, size);
+        }
         return ptr;
     }
 
