@@ -6,6 +6,7 @@
 // macros
 #define  Block_Size (sizeof(struct M_Block))
 #define ALIGNMENT 16
+#define MIN_BLOCK_SIZE 16
 #define ALIGN16(x) (((x) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
 // type definitons
@@ -30,12 +31,12 @@ struct Heap {
 struct Heap heap = {NULL, NULL};
 
 // function prototypes
-Block_Ptr findFirstFit(Block_Ptr head, size_t size);
+Block_Ptr findFirstFit(size_t size);
 void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size);
 Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block);
 void* m_alloc(size_t size);
 void zeroFill(Block_Ptr m_block);
-void createMoreMemory(size_t size);
+Block_Ptr createMoreMemory(size_t size);
 
 // ######################
 // function definitions
@@ -48,8 +49,8 @@ void zeroFill(Block_Ptr m_block){
     }
 }
 
-Block_Ptr findFirstFit(Block_Ptr head, size_t size){
-    if (head == NULL)  // head is not initialized
+Block_Ptr findFirstFit(size_t size){
+    if (heap.head == NULL)  // head is not initialized
         return NULL;
 
     Block_Ptr current = heap.head;
@@ -86,10 +87,37 @@ void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
         newBlock->next->prev = newBlock;
     newBlock->size = oldBlock->size - (size + Block_Size);
     oldBlock->size = size;
+    if (heap.end == oldBlock)
+        heap.end = newBlock;
+
     zeroFill(newBlock);
 }
 
-void createMoreMemory(size_t size){
+Block_Ptr createMoreMemory(size_t size){
+
+    // increment brk by size + metadata and
+    // give its return value (a pointer), i.e., prev loc of brk, to new_block
+    Block_Ptr new_block = sbrk(Block_Size + size);
+
+    // if the increment was not successful, return NULL
+    if (new_block == (void*) -1) return NULL;
+
+    new_block->size = size;  // give the new block the size of size
+    new_block->next = NULL;  // new_block's next is NULL bcus it's the last block
+    new_block->prev = heap.end;  // new_block's prev is old last block
+    new_block->isFree = 0;  // set the new_block's free to 0 (false)
+
+
+    if (heap.end)
+        heap.end->next = new_block;  // new_block is the next for prev last block
+    heap.end = new_block;  // new_block is the new last block of heap
+
+    if (heap.head == NULL)
+        heap.head = new_block;
+
+    zeroFill(new_block);
+
+    return new_block;
 }
 
 void* m_alloc(size_t size){
@@ -102,64 +130,25 @@ void* m_alloc(size_t size){
     if (heap.head != NULL){  // if the first block is initialized
 
         // check if an already-free block exists that fits the requirement
-        Block_Ptr fit_block = findFirstFit(heap.head, size);
+        Block_Ptr fit_block = findFirstFit(size);
 
         if (fit_block != NULL) {  // if there is a block that fits
 
-            if (fit_block->size > size + Block_Size) { // and it is big enough to be split into two
-                                                       // split into two
-                splitBlocksIntoTwo(fit_block, size);
-            }
+            if (fit_block->size > (size + Block_Size + MIN_BLOCK_SIZE))  // and it is big enough to be split into two
+                splitBlocksIntoTwo(fit_block, size);  // slpit into two
+
             // set the fit block's isFree to 0
             fit_block->isFree = 0;
 
             // return the pointer to the "data" part of the fit block (after metadata)
             return (void*)(fit_block + 1);  
         }
-
-        // if not fit block was found, extend brk (heap end)
-        else {  
-            // increment brk by size + metadata and
-            // give its return value (a pointer), i.e., prev loc of brk, to new_block
-            Block_Ptr new_block = sbrk(Block_Size + size);
-
-            // if the increment was not successful, return NULL
-            if (new_block == (void*) -1) return NULL;
-
-            new_block->size = size;  // give the new block the size of size
-            new_block->next = NULL;  // new_block's next is NULL bcus it's the last block
-            new_block->prev = heap.end;  // new_block's prev is old last block
-            new_block->isFree = 0;  // set the new_block's free to 0 (false)
-            heap.end->next = new_block;  // new_block is the next for prev last block
-            heap.end = new_block;  // new_block is the new last block of heap
-
-            // fill zero allocated
-            zeroFill(new_block);
-
-            return new_block + 1;  // return the address of the new_block after the metadata
-        }
     }
-    else {  // if no blocks in heap, i.e. first call of m_alloc 
+    Block_Ptr new_block = createMoreMemory(size);
+    if (new_block == NULL)
+        return NULL;
 
-        // same thing
-        Block_Ptr new_block = sbrk(Block_Size + size);
-
-        if (new_block == (void*) -1) return NULL;
-        new_block->size = size;
-        new_block->next = NULL;
-        new_block->prev = NULL;
-        new_block->isFree = 0;
-
-        // new_block is both the head and the end
-        heap.head = new_block;
-        heap.end = new_block;
-
-        // fill zero allocated
-        zeroFill(new_block);
-
-        return new_block + 1;
-    }
-    return NULL;
+    return (void*) (new_block + 1);
 }
 
 void m_free(void* ptr){
@@ -170,7 +159,11 @@ void m_free(void* ptr){
     m_block = m_block - 1;  // get block address
     m_block->isFree = 1;
     zeroFill(m_block);
+
     m_block = coalesceAdjacentFreeBlock(m_block);
+
+    if (brk(m_block) != 0)
+        return;
 
     if (m_block->next == NULL) {
         if (m_block->prev == NULL){
@@ -179,10 +172,8 @@ void m_free(void* ptr){
         }
         else {
             m_block->prev->next = NULL;
+            heap.end = m_block->prev;
         }
-        if (brk(m_block) != 0)
-            return;
-
     }
 }
 
@@ -243,8 +234,6 @@ Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block){
             m_block->next->prev = prev_m_block;
         m_block = prev_m_block;
     }
-
-    zeroFill(m_block);
 
     return m_block;
 }
