@@ -92,7 +92,6 @@ void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
         heap.end = newBlock;
 
     zeroFill(newBlock);
-
 }
 
 Block_Ptr createMoreMemory(size_t size){
@@ -117,16 +116,33 @@ Block_Ptr createMoreMemory(size_t size){
     if (heap.head == NULL)
         heap.head = new_block;
 
-    zeroFill(new_block);
-
     return new_block;
+}
+
+
+void* m_calloc (size_t num, size_t size){
+
+    if (num == 0 || size == 0) return NULL;
+
+    if (num > (SIZE_MAX / size)) return NULL;
+
+    size_t total_size = num * size;
+
+    void* ptr = m_alloc(total_size);
+
+    if (ptr == NULL)
+        return NULL;
+
+    zeroFill((Block_Ptr)ptr - 1);
+
+    return ptr;
 }
 
 void* m_alloc(size_t size){
     if (size == 0){
         return NULL;
     }
-    
+
     size = ALIGN16(size);
 
     if (size > (SIZE_MAX - Block_Size))
@@ -163,9 +179,8 @@ void m_free(void* ptr){
     Block_Ptr m_block = (Block_Ptr) ptr;
     m_block = m_block - 1;  // get block address
     m_block->isFree = 1;
-    zeroFill(m_block);
-
     m_block = coalesceAdjacentFreeBlock(m_block);
+    zeroFill(m_block);
 
     if (brk(m_block) != 0)
         return;
@@ -185,7 +200,7 @@ void m_free(void* ptr){
 
 
 void* m_realloc(void* ptr, size_t size) {
-    
+
     Block_Ptr old_m_block;
     void* new_m_block;
     size_t old_size;
@@ -205,7 +220,7 @@ void* m_realloc(void* ptr, size_t size) {
 
     old_m_block = (Block_Ptr)ptr - 1;
     old_size = old_m_block->size;
-    
+
     if (size <= old_size){
         if (old_m_block->size > (size + Block_Size + MIN_BLOCK_SIZE)){
             splitBlocksIntoTwo(old_m_block, size);
