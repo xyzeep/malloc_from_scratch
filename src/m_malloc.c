@@ -42,6 +42,19 @@ static Block_Ptr createMoreMemory(size_t size);
 // function definitions
 // ######################
 
+void m_print_heap(void) {
+    Block_Ptr current = heap.head;
+    printf("HEAP STATUS:\n");
+    while (current) {
+        printf("Block at %p | size: %zu | %s\n",
+               (void*)current,
+               current->size,
+               current->isFree ? "FREE" : "USED");
+        current = current->next;
+    }
+    printf("End of heap\n");
+}
+
 static void zeroFill(Block_Ptr m_block){
     char* charPtr = (char*) (m_block +  1);  // get data address
     for (size_t i = 0; i < (m_block->size) ; i++){
@@ -262,8 +275,3 @@ Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block){
 
 // ###########################################################
 
-int main()
-{
-    printf("Implementing malloc from scratch.\n");
-    return 0;
-}
