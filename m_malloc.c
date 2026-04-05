@@ -1,8 +1,8 @@
 #include <stdio.h>
-
 #include <unistd.h>
 #include <string.h>
 #include <stdint.h>
+#include "m_malloc.h"
 
 // macros
 #define  Block_Size (sizeof(struct M_Block))
@@ -11,7 +11,7 @@
 #define ALIGN16(x) (((x) + (ALIGNMENT - 1)) & ~(ALIGNMENT - 1))
 
 // type definitons
-typedef struct M_Block* Block_Ptr;
+typedef struct M_Block* Block_Ptr; // opaque
 
 // struct definitions
 struct M_Block {
@@ -29,28 +29,27 @@ struct Heap {
 
 
 // global variables
-struct Heap heap = {NULL, NULL};
+static struct Heap heap = {NULL, NULL};
 
 // function prototypes
-Block_Ptr findFirstFit(size_t size);
-void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size);
-Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block);
-void* m_alloc(size_t size);
-void zeroFill(Block_Ptr m_block);
-Block_Ptr createMoreMemory(size_t size);
+static void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size);
+static void zeroFill(Block_Ptr m_block);
+static Block_Ptr findFirstFit(size_t size);
+static Block_Ptr coalesceAdjacentFreeBlock(Block_Ptr m_block);
+static Block_Ptr createMoreMemory(size_t size);
 
 // ######################
 // function definitions
 // ######################
 
-void zeroFill(Block_Ptr m_block){
+static void zeroFill(Block_Ptr m_block){
     char* charPtr = (char*) (m_block +  1);  // get data address
-    for (int i = 0; i < (m_block->size) ; i++){
+    for (size_t i = 0; i < (m_block->size) ; i++){
         charPtr[i] = 0;
     }
 }
 
-Block_Ptr findFirstFit(size_t size){
+static Block_Ptr findFirstFit(size_t size){
     if (heap.head == NULL)  // head is not initialized
         return NULL;
 
@@ -74,7 +73,7 @@ Block_Ptr findFirstFit(size_t size){
 }
 
 
-void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
+static void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
     if (oldBlock == NULL)
         return;
 
@@ -94,7 +93,7 @@ void splitBlocksIntoTwo(Block_Ptr oldBlock, size_t size){
     zeroFill(newBlock);
 }
 
-Block_Ptr createMoreMemory(size_t size){
+static Block_Ptr createMoreMemory(size_t size){
 
     // increment brk by size + metadata and
     // give its return value (a pointer), i.e., prev loc of brk, to new_block
@@ -123,18 +122,14 @@ Block_Ptr createMoreMemory(size_t size){
 void* m_calloc (size_t num, size_t size){
 
     if (num == 0 || size == 0) return NULL;
-
     if (num > (SIZE_MAX / size)) return NULL;
 
     size_t total_size = num * size;
-
     void* ptr = m_alloc(total_size);
 
     if (ptr == NULL)
         return NULL;
-
     zeroFill((Block_Ptr)ptr - 1);
-
     return ptr;
 }
 
@@ -182,18 +177,22 @@ void m_free(void* ptr){
     m_block = coalesceAdjacentFreeBlock(m_block);
     zeroFill(m_block);
 
-    if (brk(m_block) != 0)
-        return;
 
     if (m_block->next == NULL) {
-        if (m_block->prev == NULL){
+        Block_Ptr prev = m_block->prev;
+
+        if (brk(m_block) != 0)
+            return;
+
+        if (prev == NULL){
             heap.head = NULL;
             heap.end = NULL;
         }
         else {
-            m_block->prev->next = NULL;
-            heap.end = m_block->prev;
+            prev->next = NULL;
+            heap.end = prev;
         }
+
     }
 }
 
