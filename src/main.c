@@ -1,3 +1,11 @@
+/* This file was written with the help of ChatGPT.
+ * Wasting time on writing a "test" file is stupid, I think.
+ * However, I wrote m_malloc.c and m_malloc.h myself.
+ * I think it's important that we let people know if stuff on the internet are AI generated.
+ * I love AI. I hate AI slop. Thank you.
+ */
+
+
 #include <stdio.h>
 #include <string.h>
 #include "m_malloc.h"
